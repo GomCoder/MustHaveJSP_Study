@@ -1,0 +1,60 @@
+openJDK11.0.11 version TLS Error – No appropriate protocol
+4월 30, 2021 In Security
+No appropriate protocol (protocol is disabled or cipher suites are inappropriate) Error
+갑자기 SSL Handshake Exception이 발생하며 메일이 전송이 안 됐다.
+
+javax.mail.MessagingException: Could not convert socket to TLS;
+  nested exception is:
+        javax.net.ssl.SSLHandshakeException: No appropriate protocol (protocol is disabled or cipher suites are inappropriate)
+        at com.sun.mail.smtp.SMTPTransport.startTLS(SMTPTransport.java:1907)
+        at com.sun.mail.smtp.SMTPTransport.protocolConnect(SMTPTransport.java:666)
+        at javax.mail.Service.connect(Service.java:317)
+        at javax.mail.Service.connect(Service.java:176)
+        at javax.mail.Service.connect(Service.java:125)
+        at javax.mail.Transport.send0(Transport.java:194)
+        at javax.mail.Transport.send(Transport.java:124)
+JDK 11.0.11가 release되면서 default 값으로 TLS 1.0과 TLS 1.1을 지원하지 않아 발생한 문제였다. (https://www.oracle.com/java/technologies/javase/11-0-11-relnotes.html)
+
+security-libs/javax.net.ssl
+➜ Disable TLS 1.0 and 1.1
+TLS 1.0 and 1.1 are versions of the TLS protocol that are no longer considered secure and have been superseded by more secure and modern versions (TLS 1.2 and 1.3).
+
+These versions have now been disabled by default. If you encounter issues, you can, at your own risk, re-enable the versions by removing “TLSv1” and/or “TLSv1.1” from the jdk.tls.disabledAlgorithms security property in the java.security configuration file.
+
+See JDK-8202343
+해결
+DisabledAlgorithms configuration 수정
+위에도 잘 설명되어 있듯이 java.security 에서 disabled 된 TLS 버전을 수정하면 된다.
+
+java.security 경로는 jre/lib/security/java.security지만 11버전의 경의 oepnjdk/conf/security/java.security에 위치해있다.
+
+ex) /usr/lib/jvm/java-11-openjdk-adm64/conf/security/java.security
+
+jdk.tls.disabledAlgorithms에서 TLSv1, TLSv1.1 (혹은 TLSv1만)을 없애서 disabled 되지 않도록 설정한다.
+
+jdk.tls.disabledAlgorithms=SSLv3, RC4, DES, MD5withRSA, \
+    DH keySize < 1024, EC keySize < 224, 3DES_EDE_CBC, anon, NULL, \
+    include jdk.disabled.namedCurves
+mail.smtp.ssl.trust 추가
+위와 같이 설정하면 java.io.IOException: Server is not trusted: smtp.office.365.com 에러가 발생한다.
+
+javax.mail.MessagingException: Could not convert socket to TLS;
+  nested exception is:
+        java.io.IOException: Server is not trusted: smtp.office365.com
+        at com.sun.mail.smtp.SMTPTransport.startTLS(SMTPTransport.java:1907)
+        at com.sun.mail.smtp.SMTPTransport.protocolConnect(SMTPTransport.java:666)
+        at javax.mail.Service.connect(Service.java:317)
+        at javax.mail.Service.connect(Service.java:176)
+        at javax.mail.Service.connect(Service.java:125)
+        at javax.mail.Transport.send0(Transport.java:194)
+        at javax.mail.Transport.send(Transport.java:124)
+아래의 코드처럼 본인이 사용하는 smtp 서버를 trust하는 property를 추가하면된다.
+
+properties.put("mail.smtp.ssl.trust","smtp.office365.com");
+참고
+https://stackoverflow.com/questions/32466407/how-to-force-java-server-to-accept-only-tls-1-2-and-reject-tls-1-0-and-tls-1-1-c
+https://www.oracle.com/java/technologies/javase/11-0-11-relnotes.html
+https://mkyong.com/java/where-is-the-java-security-file/
+https://stackoverflow.com/questions/67310891/i-cant-send-emails-on-ubuntu-server-javax-net-ssl-sslhandshakeexception
+https://stackoverflow.com/questions/16115453/javamail-could-not-convert-socket-to-tls-gmail/20773077
+#java11 #JavaMail #openJDK #smtp #tls #TLSv1
